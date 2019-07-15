@@ -1,0 +1,12 @@
+package waffleoRai_soundbank;
+
+public enum ADSRMode {
+	
+	LINEAR_ENVELOPE,
+	LINEAR_DB,
+	EXPONENTIAL_ENVELOPE,
+	PSX_PSEUDOEXPONENTIAL,
+	PSX_EXPONENTIAL_DECAY,
+	STATIC;
+
+}
