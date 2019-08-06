@@ -37,11 +37,13 @@ import java.util.List;
  * */
 
 /**
+ * DEPRECATED - Use MultiFileBuffer<br><br>
  * A FileBuffer subclass that is composed of a set of sequential references to other file buffers.
  * @author Blythe Hospelhorn
  * @version 1.1.0
  * @since February 20, 2019
  */
+@Deprecated
 public class CompositeBuffer extends ROSubFileBuffer
 {
 

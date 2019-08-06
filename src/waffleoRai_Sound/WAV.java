@@ -1,5 +1,7 @@
 package waffleoRai_Sound;
 
+import java.io.BufferedOutputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.LinkedList;
 import java.util.List;
@@ -7,7 +9,6 @@ import java.util.List;
 import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioInputStream;
 
-import waffleoRai_Utils.CompositeBuffer;
 import waffleoRai_Utils.FileBuffer;
 import waffleoRai_Utils.FileBuffer.UnsupportedFileTypeException;
 
@@ -418,6 +419,11 @@ public class WAV implements Sound{
 	
 	/* ----- Serialization ----- */
 	
+	private int fmtChunkSize()
+	{
+		return 16;
+	}
+	
 	private int dataChunkSize()
 	{
 		int byS = bitDepth/8;
@@ -430,12 +436,19 @@ public class WAV implements Sound{
 		return (byS * chN * fc);
 	}
 	
-	private FileBuffer serializeFMT()
+	private int smplChunkSize()
 	{
-		FileBuffer fmt = new FileBuffer(20, false);
+		if(!useSMPL) return 0;
+		return (9 * 4) + (smpl_loops.size() * 24);
+	}
+	
+	private int serializeFMT(BufferedOutputStream stream)
+	{
+		int fmt_sz = fmtChunkSize(); //Fixed at 16 for now since only one format
+		FileBuffer fmt = new FileBuffer(fmt_sz + 8, false);
 		
 		fmt.printASCIIToFile(MAG_FMT);
-		fmt.addToFile(16); //Chunk size. Fixed for now since only handle one format
+		fmt.addToFile(fmt_sz); //Chunk size. Fixed for now since only handle one format
 		fmt.addToFile((short)1); //Compression code. Fixed for now since only handle one format
 		fmt.addToFile((short)data.length); //Number of channels
 		fmt.addToFile(sampleRate); //Sample rate
@@ -445,55 +458,106 @@ public class WAV implements Sound{
 		fmt.addToFile((short)ba);
 		fmt.addToFile((short)bitDepth);
 		
-		return fmt;
+		try{stream.write(fmt.getBytes());}
+		catch(IOException e){return 0;}
+		
+		return (int)fmt.getFileSize();
 	}
 	
-	private FileBuffer serializeDATA() throws IOException
+	private int serializeDATA(BufferedOutputStream stream)
 	{
 		int csz = dataChunkSize();
-		FileBuffer datChunk = FileBuffer.createWritableBuffer("wavdat", csz + 8, false);
-		datChunk.printASCIIToFile(MAG_DATA);
-		datChunk.addToFile(csz);
+		
+		FileBuffer datHeader = new FileBuffer(8, false);
+		datHeader.printASCIIToFile(MAG_DATA);
+		datHeader.addToFile(csz);
+		try{stream.write(datHeader.getBytes());}
+		catch(IOException e){return 0;}
+		int written = 8;
 		
 		int byS = bitDepth/8;
 		int chN = data.length;
-		if (data == null) return null;
+		if (data == null) return written;
 		Channel ch = data[0];
-		if (ch == null) return null;
+		if (ch == null) return written;
 		int fc = ch.countSamples();
 		
-		for (int f = 0; f < fc; f++)
+		//We'll write one second at a time.
+		int bytesPerSecond = sampleRate * byS * chN;
+		int samplesRemaining = fc;
+		int samplePos = 0;
+		
+		while(samplesRemaining >= sampleRate)
 		{
-			for (int c = 0; c < chN; c++)
+			//Dump samples to disk one second at a time
+			FileBuffer second = new FileBuffer(bytesPerSecond, false);
+			for (int f = 0; f < sampleRate; f++)
 			{
-				int s = data[c].getSample(f);
-				switch(byS)
+				for (int c = 0; c < chN; c++)
 				{
-				case 1:
-					datChunk.addToFile((byte)s);
-					break;
-				case 2:
-					datChunk.addToFile((short)s);
-					break;
-				case 3:
-					datChunk.add24ToFile(s);
-					break;
-				case 4:
-					datChunk.addToFile(s);
-					break;
-				default: return null;
+					int s = data[c].getSample(samplePos);
+					switch(byS)
+					{
+					case 1:
+						second.addToFile((byte)s);
+						break;
+					case 2:
+						second.addToFile((short)s);
+						break;
+					case 3:
+						second.add24ToFile(s);
+						break;
+					case 4:
+						second.addToFile(s);
+						break;
+					}
 				}
+				samplePos++;
 			}
+			samplesRemaining = fc - samplePos;
+			try{stream.write(second.getBytes()); written += second.getFileSize();}
+			catch(IOException e){return written;}
 		}
 		
+		//Write remaining partial second (if present)
+		if(samplesRemaining > 0)
+		{
+			int bytesLeft = samplesRemaining * byS * chN;
+			FileBuffer part = new FileBuffer(bytesLeft, false);
+			for (int f = 0; f < samplesRemaining; f++)
+			{
+				for (int c = 0; c < chN; c++)
+				{
+					int s = data[c].getSample(samplePos);
+					switch(byS)
+					{
+					case 1:
+						part.addToFile((byte)s);
+						break;
+					case 2:
+						part.addToFile((short)s);
+						break;
+					case 3:
+						part.add24ToFile(s);
+						break;
+					case 4:
+						part.addToFile(s);
+						break;
+					}
+				}
+				samplePos++;
+			}
+			try{stream.write(part.getBytes()); written += part.getFileSize();}
+			catch(IOException e){return written;}
+		}
 		
-		return datChunk;
+		return written;
 	}
 	
-	private FileBuffer serializeSMPL()
+	private int serializeSMPL(BufferedOutputStream stream)
 	{
-		if(!useSMPL) return null;
-		int smplsize = (9 * 4) + (smpl_loops.size() * 24);
+		if(!useSMPL) return 0;
+		int smplsize = smplChunkSize();
 		
 		FileBuffer smpl = new FileBuffer(smplsize+8, false);
 		smpl.printASCIIToFile(MAG_SMPL);
@@ -520,39 +584,34 @@ public class WAV implements Sound{
 			smpl.addToFile(l.playCount);
 		}
 		
-		return smpl;
+		try{stream.write(smpl.getBytes());}
+		catch(IOException e){return 0;}
+		
+		return (int)smpl.getFileSize();
 	}
 	
-	public FileBuffer serializeMe() throws IOException
+	public void writeFile(String filepath) throws IOException
 	{
-		int chunks = 3;
-		FileBuffer fmt = serializeFMT();
-		FileBuffer data = serializeDATA();
-		FileBuffer smpl = serializeSMPL();
-		if(smpl != null) chunks++;
-		long wavSz = fmt.getFileSize() + data.getFileSize();
-		if (smpl != null) wavSz += smpl.getFileSize();
+		BufferedOutputStream os = new BufferedOutputStream(new FileOutputStream(filepath));
+		long fmt_sz = fmtChunkSize() + 8;
+		long data_sz = dataChunkSize() + 8;
+		long smpl_sz = smplChunkSize() + 8;
+		
+		long wavSz = fmt_sz + data_sz + smpl_sz;
 		
 		//Make header.
 		FileBuffer wavhead = new FileBuffer(12, false);
 		wavhead.printASCIIToFile(MAG0);
 		wavhead.addToFile((int)wavSz);
 		wavhead.printASCIIToFile(MAG1);
+		os.write(wavhead.getBytes());
+				
+		//Write the rest
+		serializeFMT(os);
+		serializeDATA(os);
+		serializeSMPL(os);
 		
-		//Make composite
-		FileBuffer comp = new CompositeBuffer(chunks);
-		comp.addToFile(wavhead);
-		comp.addToFile(fmt);
-		comp.addToFile(data);
-		if(smpl != null) comp.addToFile(smpl);
-		
-		return comp;
-	}
-	
-	public void writeFile(String filepath) throws IOException
-	{
-		FileBuffer wav = serializeMe();
-		wav.writeFile(filepath);
+		os.close();
 	}
 	
 	/* ----- Getters ----- */

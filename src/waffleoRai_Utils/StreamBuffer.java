@@ -10,7 +10,6 @@ import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -50,12 +49,14 @@ import java.util.concurrent.ConcurrentSkipListMap;
  * */
 
 /**
+ * DEPRECATED - Use CacheFileBuffer<br><br>
  * For files larger than should be held in memory.
  * <br>Works like a cache.
  * @author Blythe Hospelhorn
  * @version 2.0.0
  * @since April 29, 2019
  */
+@Deprecated
 public class StreamBuffer extends FileBuffer
 {
 	
@@ -1079,13 +1080,6 @@ public class StreamBuffer extends FileBuffer
 	{
 		flush();
 		initialRead();
-	}
-	
-	private void cleanTemp() throws IOException
-	{
-		this.tempMode = false;
-		Files.deleteIfExists(Paths.get(tempPath));
-		this.tempPath = null;
 	}
 	
 	/* ----- SECTOR MANAGEMENT ----- */

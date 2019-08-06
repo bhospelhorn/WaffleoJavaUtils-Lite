@@ -18,8 +18,6 @@ import java.util.Random;
 import java.util.Set;
 import java.util.TimeZone;
 
-
-
 /*UPDATES
  * 2017.08.31
  * 	3.2 -> 3.2.1 | Added getMemoryBurden() function
