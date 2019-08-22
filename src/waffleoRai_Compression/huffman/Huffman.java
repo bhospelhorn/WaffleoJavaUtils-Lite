@@ -8,11 +8,13 @@ import waffleoRai_Utils.FileBuffer;
 //import waffleoRai_Utils.BinTree.BinNodeInfo;
 import waffleoRai_Utils.StreamBuffer;
 
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.FileReader;
-import java.io.FileWriter;
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.file.Path;
 
 /*
@@ -512,29 +514,36 @@ public class Huffman
 		}
 	}
 
-	private static class BufferedReaderWrapper implements InputWrapper
+	private static class InputStreamWrapper implements InputWrapper
 	{
-		private BufferedReader reader;
+		private InputStream stream;
 		
 		private byte lastbyte;
 		private int biPos;
 		
+		private boolean streamEnding;
 		private boolean streamEnded;
 		private long bytesRead;
 		private long maxBytes;
 		
-		public BufferedReaderWrapper(BufferedReader br, int bDepth, long byteCount) throws IOException
+		public InputStreamWrapper(InputStream is, int bDepth, long byteCount) throws IOException
 		{
-			reader = br;
+			stream = is;
 			biPos = 7;
 			bytesRead = 0;
 			maxBytes = byteCount;
 			streamEnded = false;
+			streamEnding = false;
 			
-			int i = reader.read();
+			int i = stream.read();
 			if (i == -1){
 				streamEnded = true;
 				return;
+			}
+			else
+			{
+				lastbyte = (byte)i;
+				//bytesRead++;
 			}
 		}
 		
@@ -545,21 +554,27 @@ public class Huffman
 
 		private void getNextByte() throws IOException
 		{
-			int i = reader.read();
-			bytesRead++;
+			int i = stream.read();
+			//bytesRead++;
+			//if(bytesRead <= 0x200) System.err.print(Integer.toHexString(i)+"|");
 			if (i == -1)
 			{
 				lastbyte = 0;
-				streamEnded = true;
+				streamEnding = true;
 			}
 			else
 			{
 				lastbyte = (byte)i;
+				//if(bytesRead <= 0x200) System.err.print(String.format("%02x", lastbyte)+" ");
 			}
 		}
 		
 		private long getBits(int bitcount) throws IOException
 		{
+			//if(lastbyte == (byte)0x80) System.err.println("Last Byte: 0x" + Long.toHexString(lastbyte));
+			//long dblb = Byte.toUnsignedLong(lastbyte);
+			//if(dblb == 0x80) System.err.println("Last Byte: 0x" + Long.toHexString(dblb));
+			
 			int bits = 0;
 			long val = 0;
 			long mask = 0x1L << biPos;
@@ -568,22 +583,29 @@ public class Huffman
 			while (bits < bitcount)
 			{
 				val |= (b & mask);
-				val = val << 1;
+				//val = val << 1;
 				mask = mask >>> 1;
 				biPos--;
 				
 				if (biPos < 0)
 				{
-					//Get next byte
-					getNextByte();
-					biPos = 7;
-					mask = 0x80L;
-					b = Byte.toUnsignedLong(lastbyte);
+					bytesRead++;
+					if(streamEnding) streamEnded = true;
+					else
+					{
+						//Get next byte
+						getNextByte();
+						biPos = 7;
+						mask = 0x80L;
+						b = Byte.toUnsignedLong(lastbyte);	
+					}
 				}
 				
 				bits++;
 			}
 			
+			//if(dblb != val) System.err.println("In: 0x" + Long.toHexString(dblb) + " | Out: 0x" + Long.toHexString(val));
+			//if(bytesRead < 16) System.err.println("Returning value: 0x" + Long.toHexString(val));
 			return val;
 		}
 		
@@ -620,20 +642,21 @@ public class Huffman
 		
 	}
 	
-	private static class BufferedWriterWrapper implements OutputWrapper
+	private static class OutputStreamWrapper implements OutputWrapper
 	{
 		
-		private BufferedWriter writer;
+		private OutputStream stream;
 		
-		public BufferedWriterWrapper(BufferedWriter bw)
+		public OutputStreamWrapper(OutputStream os)
 		{
-			writer = bw;
+			stream = os;
 		}
 
 		@Override
 		public void putByte(byte b) throws IOException 
 		{
-			writer.write(b);
+			//writer.write(b);
+			stream.write(Byte.toUnsignedInt(b));
 		}
 		
 	}
@@ -1471,8 +1494,9 @@ public class Huffman
 		if (includeTable) table = this.serializeTable(edpos - stpos);
 		
 		/*Open Output Stream & Dump header stuff*/
-		BufferedWriter bw = new BufferedWriter(new FileWriter(outstr));
-		if (optionalHeaderString != null && !optionalHeaderString.isEmpty()) bw.write(optionalHeaderString);
+		//BufferedWriter bw = new BufferedWriter(new FileWriter(outstr));
+		BufferedOutputStream bw = new BufferedOutputStream(new FileOutputStream(outstr));
+		if (optionalHeaderString != null && !optionalHeaderString.isEmpty()) bw.write(optionalHeaderString.getBytes());
 		if (table != null)
 		{
 			long tblsz = table.getFileSize();
@@ -1483,10 +1507,12 @@ public class Huffman
 		}
 		
 		/*Open Input Stream & Wrap Streams*/
-		BufferedReader br = new BufferedReader(new FileReader(instr));
+		//BufferedReader br = new BufferedReader(new FileReader(instr));
+		//if(stpos > 0) br.skip(stpos);
+		BufferedInputStream br = new BufferedInputStream(new FileInputStream(instr));
 		if(stpos > 0) br.skip(stpos);
-		BufferedReaderWrapper instream = new BufferedReaderWrapper(br, bitDepth, edpos - stpos);
-		BufferedWriterWrapper outstream = new BufferedWriterWrapper(bw);
+		InputStreamWrapper instream = new InputStreamWrapper(br, bitDepth, edpos - stpos);
+		OutputStreamWrapper outstream = new OutputStreamWrapper(bw);
 		
 		/*Encoding*/
 		try
@@ -1518,10 +1544,12 @@ public class Huffman
 		if (edpos > fsz) edpos = fsz;
 		
 		//This method assumes that stpos has already been advanced after table & header string
-		BufferedReader br = new BufferedReader(new FileReader(instr));
-		BufferedWriter bw = new BufferedWriter(new FileWriter(outstr));
-		BufferedReaderWrapper instream = new BufferedReaderWrapper(br, bitDepth, edpos - stpos);
-		BufferedWriterWrapper outstream = new BufferedWriterWrapper(bw);
+		//BufferedReader br = new BufferedReader(new FileReader(instr));
+		//BufferedWriter bw = new BufferedWriter(new FileWriter(outstr));
+		BufferedInputStream br = new BufferedInputStream(new FileInputStream(instr));
+		BufferedOutputStream bw = new BufferedOutputStream(new FileOutputStream(outstr));
+		InputStreamWrapper instream = new InputStreamWrapper(br, bitDepth, edpos - stpos);
+		OutputStreamWrapper outstream = new OutputStreamWrapper(bw);
 		
 		//Advance br to stpos
 		if(stpos > 0) br.skip(stpos);
@@ -1780,6 +1808,7 @@ public class Huffman
 		/*Generates a table of frequencies of each bit set (usually byte)*/
 		HuffTable myTable = new HuffTable(bitDepth);
 		myTable.setFileSize(myFile.getFileSize());
+		//System.err.println("File Size: 0x" + Long.toHexString(myFile.getFileSize()));
 		
 		int byPos = 0;
 		int biPos = 0;
@@ -1841,6 +1870,7 @@ public class Huffman
 			}
 		}
 		
+		myTable.printToStdOut();
 		return myTable;
 	}
 	
@@ -1849,18 +1879,23 @@ public class Huffman
 		HuffTable myTable = new HuffTable(bitDepth);
 		long fsz = FileBuffer.fileSize(filePath.toString());
 		myTable.setFileSize(fsz);
+		System.err.println("File Size: 0x" + Long.toHexString(fsz));
 		
 		if (bitDepth < 2) return null;
 		
-		BufferedReader br = new BufferedReader(new FileReader(filePath.toString()));
-		BufferedReaderWrapper instream = new BufferedReaderWrapper(br, bitDepth, fsz);
+		//BufferedReader br = new BufferedReader(new FileReader(filePath.toString()));
+		//BufferedReaderWrapper instream = new BufferedReaderWrapper(br, bitDepth, fsz);
+		BufferedInputStream br = new BufferedInputStream(new FileInputStream(filePath.toString()));
+		InputStreamWrapper instream = new InputStreamWrapper(br, bitDepth, fsz);
 		
+		int dbctr = 0;
 		while(instream.dataRemaining())
 		{
 			if (bitDepth <= 8)
 			{
-				byte b = instream.getBits8(bitDepth);
-				myTable.incrementFrequency(Byte.toUnsignedLong(b));
+				//byte b = instream.getBits8(bitDepth);
+				myTable.incrementFrequency(instream.getBits(bitDepth));
+				dbctr++;
 			}
 			else if (bitDepth > 8 && bitDepth <= 16)
 			{
@@ -1880,6 +1915,8 @@ public class Huffman
 		}
 		
 		br.close();
+		System.err.println("Bytes Read: 0x" + Integer.toHexString(dbctr));
+		myTable.printToStdOut();
 		return myTable;
 	}
 	

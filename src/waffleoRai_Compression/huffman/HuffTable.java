@@ -267,4 +267,16 @@ public class HuffTable
 		return s;
 	}
 
+	public void printToStdOut()
+	{
+		List<HuffPoint> contents = contentsToList(false);
+		if(contents == null) return;
+		for(HuffPoint p : contents)
+		{
+			System.out.print(Long.toHexString(p.symbol) + "\t");
+			System.out.print(p.frequency + "\t");
+			System.out.print(p.code + "\n");
+		}
+	}
+	
 }
