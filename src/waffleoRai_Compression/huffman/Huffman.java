@@ -1879,7 +1879,7 @@ public class Huffman
 		HuffTable myTable = new HuffTable(bitDepth);
 		long fsz = FileBuffer.fileSize(filePath.toString());
 		myTable.setFileSize(fsz);
-		System.err.println("File Size: 0x" + Long.toHexString(fsz));
+		//System.err.println("File Size: 0x" + Long.toHexString(fsz));
 		
 		if (bitDepth < 2) return null;
 		
@@ -1888,14 +1888,14 @@ public class Huffman
 		BufferedInputStream br = new BufferedInputStream(new FileInputStream(filePath.toString()));
 		InputStreamWrapper instream = new InputStreamWrapper(br, bitDepth, fsz);
 		
-		int dbctr = 0;
+		//int dbctr = 0;
 		while(instream.dataRemaining())
 		{
 			if (bitDepth <= 8)
 			{
 				//byte b = instream.getBits8(bitDepth);
 				myTable.incrementFrequency(instream.getBits(bitDepth));
-				dbctr++;
+				//dbctr++;
 			}
 			else if (bitDepth > 8 && bitDepth <= 16)
 			{
@@ -1915,8 +1915,8 @@ public class Huffman
 		}
 		
 		br.close();
-		System.err.println("Bytes Read: 0x" + Integer.toHexString(dbctr));
-		myTable.printToStdOut();
+		//System.err.println("Bytes Read: 0x" + Integer.toHexString(dbctr));
+		//myTable.printToStdOut();
 		return myTable;
 	}
 	

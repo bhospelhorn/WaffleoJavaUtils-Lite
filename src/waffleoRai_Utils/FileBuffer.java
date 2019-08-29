@@ -68,6 +68,8 @@ import java.util.TimeZone;
  * 	3.5.2 -> 3.6.0 | Added getBytes() methods
  * 2019.04.28
  * 	3.6.0 -> 3.6.1 | Various debugging tweaks
+ * 2019.08.28
+ * 	3.6.1 -> 3.6.2 | Wasn't deleting temp files it was making. That was annoying.
  * 
  * */
 
@@ -80,8 +82,8 @@ import java.util.TimeZone;
  * <br> Due to byte array and byte buffer conversion procedures, maximum capacity and file size cannot exceed
  * 0x7FFFFFFF (~2GB) at a time, even with overflow.
  * @author Blythe Hospelhorn
- * @version 3.6.1
- * @since April 28, 2019
+ * @version 3.6.2
+ * @since August 28, 2019
  */
 public class FileBuffer 
 {
@@ -3187,6 +3189,7 @@ public class FileBuffer
   		File temp = File.createTempFile("FileBuffer_generateTempDir", ".tmp");
   		String aPath = temp.getAbsolutePath();
   		tempDir = aPath.substring(0, aPath.lastIndexOf(File.separatorChar));
+  		Files.deleteIfExists(Paths.get(aPath));
   	}
   	
   	/**
