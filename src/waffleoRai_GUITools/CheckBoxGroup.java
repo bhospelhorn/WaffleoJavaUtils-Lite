@@ -21,6 +21,12 @@ public class CheckBoxGroup {
 		boxes[index] = box;
 	}
 	
+	public JCheckBox getCheckBox(int index)
+	{
+		if (index < 0 || index >= boxes.length) return null;
+		return boxes[index];
+	}
+	
 	public void select(int index)
 	{
 		if (index < 0 || index >= boxes.length) return;
@@ -123,5 +129,4 @@ public class CheckBoxGroup {
 		for (JCheckBox cb : boxes) cb.repaint();
 	}
 	
-
 }
