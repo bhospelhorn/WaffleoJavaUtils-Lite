@@ -1870,7 +1870,7 @@ public class Huffman
 			}
 		}
 		
-		myTable.printToStdOut();
+		//myTable.printToStdOut();
 		return myTable;
 	}
 	

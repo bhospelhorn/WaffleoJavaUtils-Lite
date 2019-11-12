@@ -1,13 +1,20 @@
 package waffleoRai_Sound;
 
+import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.LinkedList;
 import java.util.List;
 
 import javax.sound.sampled.AudioFormat;
+import javax.sound.sampled.AudioFormat.Encoding;
 import javax.sound.sampled.AudioInputStream;
+import javax.sound.sampled.AudioSystem;
 
 import waffleoRai_Utils.FileBuffer;
 import waffleoRai_Utils.FileBuffer.UnsupportedFileTypeException;
@@ -612,6 +619,177 @@ public class WAV implements Sound{
 		serializeSMPL(os);
 		
 		os.close();
+	}
+	
+	public static void writeAsWAV(AudioInputStream data, String path) throws UnsupportedFileTypeException, IOException
+	{
+		AudioFormat srcFormat = data.getFormat();
+		if(srcFormat.getEncoding() != Encoding.PCM_SIGNED) throw new UnsupportedFileTypeException("WAV.writeWAV || Data encoding must be PCM signed.");
+		
+		//Calculate data size
+		long frameCount = data.getFrameLength();
+		long datSize = 0;
+		String tempfile = null;
+		InputStream src = null;
+		if(frameCount == AudioSystem.NOT_SPECIFIED)
+		{
+			//Well, we'll just have to write the data out first and stream back in...
+			tempfile = FileBuffer.generateTemporaryPath("wav_writer");
+			BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(tempfile));
+			int b = -1;
+			while((b = data.read()) != -1)
+			{
+				bos.write(b);
+				datSize++;
+			}
+			bos.close();
+			
+			//Read back in
+			src = new BufferedInputStream(new FileInputStream(tempfile));
+		}
+		else{datSize = frameCount * srcFormat.getFrameSize(); src = data;}
+		
+		int bitDepth = srcFormat.getSampleSizeInBits();
+		int sampleRate = (int)srcFormat.getSampleRate();
+		int chCount = srcFormat.getChannels();
+		
+		int wavSize = (int)(8L + 24L + 8L + datSize);
+		
+		BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(path));
+		
+		//Header
+		FileBuffer wavhead = new FileBuffer(12, false);
+		wavhead.printASCIIToFile(MAG0);
+		wavhead.addToFile((int)wavSize);
+		wavhead.printASCIIToFile(MAG1);
+		bos.write(wavhead.getBytes());
+		
+		//Format
+		int fmt_sz = 16; //Fixed at 16 for now since only one format
+		FileBuffer fmt = new FileBuffer(fmt_sz + 8, false);
+		
+		fmt.printASCIIToFile(MAG_FMT);
+		fmt.addToFile(fmt_sz); //Chunk size. Fixed for now since only handle one format
+		fmt.addToFile((short)1); //Compression code. Fixed for now since only handle one format
+		fmt.addToFile((short)chCount); //Number of channels
+		fmt.addToFile(sampleRate); //Sample rate
+		int ba = (bitDepth/8)/(int)datSize;
+		int abps = sampleRate * ba;
+		fmt.addToFile(abps);
+		fmt.addToFile((short)ba);
+		fmt.addToFile((short)bitDepth);
+		bos.write(fmt.getBytes());
+		
+		//Data
+		FileBuffer datHead = new FileBuffer(8, false);
+		datHead.printASCIIToFile(MAG_DATA);
+		datHead.addToFile((int)datSize);
+		bos.write(datHead.getBytes());
+		
+		if(srcFormat.isBigEndian())
+		{
+			//We'll have to reverse the bytes >>
+			int b = -1;
+			switch(bitDepth)
+			{
+			case 8:
+				while((b = src.read()) != -1) bos.write(b);
+				break;
+			case 16:
+				while((b = src.read()) != -1)
+				{
+					int b0 = b;
+					int b1 = src.read();
+					if(b1 == -1)
+					{
+						bos.write(0);
+						bos.write(b0);
+						break;
+					}
+					bos.write(b1);
+					bos.write(b0);
+				}
+				break;
+			case 24:
+				while((b = src.read()) != -1)
+				{
+					int b0 = b;
+					int b1 = src.read();
+					if(b1 == -1)
+					{
+						bos.write(0);
+						bos.write(0);
+						bos.write(b0);
+						break;
+					}
+					int b2 = src.read();
+					if(b2 == -1)
+					{
+						bos.write(0);
+						bos.write(b1);
+						bos.write(b0);
+						break;
+					}
+					bos.write(b2);
+					bos.write(b1);
+					bos.write(b0);
+				}
+				break;
+			case 32:
+				while((b = src.read()) != -1)
+				{
+					int b0 = b;
+					int b1 = src.read();
+					if(b1 == -1)
+					{
+						bos.write(0);
+						bos.write(0);
+						bos.write(0);
+						bos.write(b0);
+						break;
+					}
+					int b2 = src.read();
+					if(b2 == -1)
+					{
+						bos.write(0);
+						bos.write(0);
+						bos.write(b1);
+						bos.write(b0);
+						break;
+					}
+					int b3 = src.read();
+					if(b3 == -1)
+					{
+						bos.write(0);
+						bos.write(b2);
+						bos.write(b1);
+						bos.write(b0);
+						break;
+					}
+					bos.write(b3);
+					bos.write(b2);
+					bos.write(b1);
+					bos.write(b0);
+				}
+				break;
+			}
+		}
+		else
+		{
+			//Just copy as is
+			int b = -1;
+			while((b = src.read()) != -1) bos.write(b);
+		}
+		
+		bos.close();
+		
+		//Close any temp streams
+		if(tempfile != null)
+		{
+			src.close();
+			Files.deleteIfExists(Paths.get(tempfile));
+		}
+		
 	}
 	
 	/* ----- Getters ----- */
