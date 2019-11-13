@@ -17,6 +17,8 @@ public abstract class Arunnable implements Runnable{
 	protected long sleeptime;
 	protected long delay;
 	
+	private volatile boolean interrupts_enabled = true;
+	
 	protected BlockingQueue<Thread> myThreads;
 	
 	protected String name;
@@ -256,14 +258,18 @@ public abstract class Arunnable implements Runnable{
 	public void interruptThreads()
 	{
 		//System.err.println(Thread.currentThread().getName() + " || Arunnable.interruptThreads || " + name + " || DEBUG: Interrupt Requested...");
-		synchronized(this)
+		if(interrupts_enabled)
 		{
-			for(Thread t : myThreads) 
+			synchronized(this)
 			{
-			//System.err.println(Thread.currentThread().getName() + " || Arunnable.interruptThreads || " + name + " || DEBUG: Interrupting thread " + t.getName());
-				t.interrupt();	
-			}
+				for(Thread t : myThreads) 
+				{
+				//System.err.println(Thread.currentThread().getName() + " || Arunnable.interruptThreads || " + name + " || DEBUG: Interrupting thread " + t.getName());
+					t.interrupt();	
+				}
+			}	
 		}
+		else skipWaitCycles++;
 		//System.err.println(Thread.currentThread().getName() + " || Arunnable.interruptThreads || " + name + " || DEBUG: Interrupt Attempts Complete!");
 	}
 	
@@ -284,9 +290,30 @@ public abstract class Arunnable implements Runnable{
 		//System.err.println(Thread.currentThread().getName() + " || Arunnable.runWithSleep || " + name + " || DEBUG: Wait skip added! Skips left: " + skipWaitCycles);
 	}
 	
+	public boolean anyThreadsRegistered()
+	{
+		if(myThreads == null) return false;
+		return !myThreads.isEmpty();
+	}
+	
 	public boolean anyThreadsAlive()
 	{
-		return !myThreads.isEmpty();
+		if(myThreads == null) return false;
+		for(Thread t : myThreads)
+		{
+			if(t.isAlive()) return true;
+		}
+		return false;
+	}
+	
+	protected synchronized void disableInterrupts()
+	{
+		this.interrupts_enabled = false;
+	}
+	
+	protected synchronized void enableInterrupts()
+	{
+		this.interrupts_enabled = true;
 	}
 	
 }
