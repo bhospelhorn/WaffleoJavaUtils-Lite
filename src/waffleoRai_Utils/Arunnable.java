@@ -255,21 +255,22 @@ public abstract class Arunnable implements Runnable{
 		return paused;
 	}
 	
-	public void interruptThreads()
+	public synchronized void interruptThreads()
 	{
 		//System.err.println(Thread.currentThread().getName() + " || Arunnable.interruptThreads || " + name + " || DEBUG: Interrupt Requested...");
 		if(interrupts_enabled)
 		{
-			synchronized(this)
+			for(Thread t : myThreads) 
 			{
-				for(Thread t : myThreads) 
-				{
 				//System.err.println(Thread.currentThread().getName() + " || Arunnable.interruptThreads || " + name + " || DEBUG: Interrupting thread " + t.getName());
-					t.interrupt();	
-				}
-			}	
+				t.interrupt();	
+			}
 		}
-		else skipWaitCycles++;
+		else
+		{
+			//System.err.println(Thread.currentThread().getName() + " || Arunnable.interruptThreads || " + name + " || DEBUG: Interrupts should be disabled!");
+			if(skipWaitCycles < 1) skipWaitCycles++;
+		}
 		//System.err.println(Thread.currentThread().getName() + " || Arunnable.interruptThreads || " + name + " || DEBUG: Interrupt Attempts Complete!");
 	}
 	
@@ -309,6 +310,7 @@ public abstract class Arunnable implements Runnable{
 	protected synchronized void disableInterrupts()
 	{
 		this.interrupts_enabled = false;
+		Thread.interrupted();
 	}
 	
 	protected synchronized void enableInterrupts()
