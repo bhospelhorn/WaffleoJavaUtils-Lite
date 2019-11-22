@@ -51,6 +51,7 @@ public abstract class Arunnable implements Runnable{
 		if(myThreads == null) instantiateThreadList();
 		//System.err.println(Thread.currentThread().getName() + " || Arunnable.run || " + name + " || DEBUG: Run Called!");
 		myThreads.add(Thread.currentThread());
+		
 		//Wait for delay time unless interrupted.
 		try 
 		{
@@ -61,6 +62,8 @@ public abstract class Arunnable implements Runnable{
 			//System.err.println(Thread.currentThread().getName() + " || Arunnable.run || Initial delay interrupted. Run will now commence.");
 			//e.printStackTrace();
 		}
+		
+		initialize();
 		
 		if(sleeps) 
 		{
@@ -219,6 +222,8 @@ public abstract class Arunnable implements Runnable{
 		}	
 		//System.err.println(Thread.currentThread().getName() + " || Arunnable.requestContinuously || " + name + " || DEBUG: Returning...");
 	}
+	
+	public void initialize(){}
 	
 	public abstract void doSomething();
 	
